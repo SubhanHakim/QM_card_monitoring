@@ -32,6 +32,7 @@ import {
   AlertOctagon,
   AlertTriangle,
   ArrowUpRight,
+  BarChart3,
   CheckCircle,
   ChevronDown,
   Clock,
@@ -181,24 +182,45 @@ export default function DashboardPage() {
       {/* ─── 1. TOP NAVIGATION BAR ─── */}
       <header className="sticky top-0 z-20 border-b border-border/70 bg-background/90 backdrop-blur-md px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo & Title */}
-          <div className="flex items-center gap-3.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-base shadow-sm">
-              QM
-            </div>
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-lg font-bold tracking-tight text-foreground">
-                  Quality Monitoring
-                </h1>
-                <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200/70 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900/40">
-                  IDE Stage
-                </span>
+          {/* Logo & Navigation Tabs */}
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-base shadow-sm">
+                QM
               </div>
-              <p className="text-xs text-muted-foreground">
-                Rekapitulasi Evaluasi Pemeriksaan per Aplikasi
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-bold tracking-tight text-foreground">
+                    Quality Monitoring
+                  </h1>
+                  <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200/70 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900/40">
+                    IDE Stage
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Rekapitulasi Evaluasi Pemeriksaan per Aplikasi
+                </p>
+              </div>
             </div>
+
+            {/* Segmented Switcher */}
+            <nav className="hidden md:flex items-center p-1 rounded-xl bg-muted/60 border border-border/50 text-xs font-medium">
+              <button
+                type="button"
+                className="px-3.5 py-1.5 rounded-lg bg-background text-foreground font-semibold shadow-xs flex items-center gap-1.5"
+              >
+                <FileText className="h-3.5 w-3.5 text-primary" />
+                Daftar Laporan
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/rekap")}
+                className="px-3.5 py-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5"
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+                Rekap Bulanan
+              </button>
+            </nav>
           </div>
 
           {/* User Profile & Actions */}
@@ -229,6 +251,13 @@ export default function DashboardPage() {
                     {user?.role || "analis"}
                   </p>
                 </div>
+                <DropdownMenuItem
+                  onClick={() => navigate("/rekap")}
+                  className="cursor-pointer text-sm font-medium flex items-center gap-2.5 p-2 rounded-md"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  Rekap Bulanan
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={handleLogout}
                   className="text-destructive focus:text-destructive cursor-pointer text-sm font-medium flex items-center gap-2.5 p-2 rounded-md mt-1"

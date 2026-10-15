@@ -22,6 +22,10 @@ export interface ErrorDetail {
 
 export interface IdeReportItem {
   id_aplikasi: string;
+  nama_aplikan?: string | null;
+  nama_user_ide?: string | null;
+  cas_sas?: string | null;
+  channel?: string | null;
   total_bobot: number | string;
   analis: string | null;
   errors: ErrorDetail[];
@@ -34,17 +38,128 @@ export interface IdeReportItem {
 
 export interface SubmitIdePayload {
   id_aplikasi: string;
+  nama_aplikan?: string;
+  nama_user_ide?: string;
+  cas_sas?: string;
+  channel?: string;
   errors: number[]; // array of id_error
   catatan_tambahan?: string | null;
 }
 
 export interface UpdateIdePayload {
   errors: number[]; // array of id_error
+  nama_aplikan?: string;
+  nama_user_ide?: string;
+  cas_sas?: string;
+  channel?: string;
   catatan_tambahan?: string | null;
   tahap_pengecekan?: string;
 }
 
+export interface RekapBulananRingkasan {
+  total_aplikasi: number;
+  total_error: number;
+  rata_rata_bobot: number;
+  total_fatal: number;
+  total_minor: number;
+  total_lolos: number;
+}
+
+export interface RekapBulananChannel {
+  channel: string;
+  total_aplikasi: number;
+  total_error: number;
+}
+
+export interface RekapBulananAnalis {
+  username: string;
+  total_aplikasi: number;
+  total_error: number;
+  total_fatal: number;
+  total_minor: number;
+  total_lolos: number;
+}
+
+export interface RekapBulananTopError {
+  id_error: number;
+  nama_field: string;
+  kategori: string;
+  bobot: number;
+  frekuensi: number;
+}
+
+export interface RekapBulananResponse {
+  periode: string;
+  bulan: number;
+  tahun: number;
+  ringkasan: RekapBulananRingkasan;
+  per_channel: RekapBulananChannel[];
+  per_analis: RekapBulananAnalis[];
+  top_error: RekapBulananTopError[];
+}
+
+export interface RekapBulananDetailParams {
+  bulan: number;
+  tahun: number;
+  channel?: string | null;
+  analis?: string | null;
+  status?: string | null;
+}
+
+export interface RekapBulananDetailItem {
+  id_aplikasi: string;
+  nama_aplikan?: string | null;
+  nama_user_ide?: string | null;
+  cas_sas?: string | null;
+  channel?: string | null;
+  tanggal_input?: string | null;
+  analis: string | null;
+  total_bobot: number;
+  jumlah_error: number;
+  status: "Fatal" | "Minor" | "Lolos" | string;
+  errors: {
+    id_error: number;
+    nama_field: string;
+    kategori?: string;
+    bobot: number;
+  }[];
+}
+
+export interface RekapBulananDetailResponse {
+  periode: string;
+  bulan: number;
+  tahun: number;
+  total_aplikasi: number;
+  data: RekapBulananDetailItem[];
+}
+
 export const ideService = {
+  // GET: /ide/rekap/bulanan?bulan=10&tahun=2026
+  getRekapBulanan: async (bulan: number, tahun: number): Promise<RekapBulananResponse> => {
+    const response = await api.get<RekapBulananResponse>("/ide/rekap/bulanan", {
+      params: { bulan, tahun },
+    });
+    return response.data;
+  },
+
+  // GET: /ide/rekap/bulanan/detail?bulan=10&tahun=2026&channel=...&analis=...&status=...
+  getRekapBulananDetail: async (
+    params: RekapBulananDetailParams
+  ): Promise<RekapBulananDetailResponse> => {
+    const cleanParams: Record<string, any> = {
+      bulan: params.bulan,
+      tahun: params.tahun,
+    };
+    if (params.channel) cleanParams.channel = params.channel;
+    if (params.analis) cleanParams.analis = params.analis;
+    if (params.status) cleanParams.status = params.status;
+
+    const response = await api.get<RekapBulananDetailResponse>(
+      "/ide/rekap/bulanan/detail",
+      { params: cleanParams }
+    );
+    return response.data;
+  },
   // GET: http://localhost:5000/api/ide/report
   getReports: async () => {
     const response = await api.get<IdeReportItem[]>("/ide/report");

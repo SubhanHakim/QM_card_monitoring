@@ -33,6 +33,10 @@ export function SubmitIdeModal({
   editData,
 }: SubmitIdeModalProps) {
   const [idAplikasi, setIdAplikasi] = useState("");
+  const [namaAplikan, setNamaAplikan] = useState("");
+  const [namaUserIde, setNamaUserIde] = useState("");
+  const [casSas, setCasSas] = useState("");
+  const [channel, setChannel] = useState("");
   const [selectedErrors, setSelectedErrors] = useState<number[]>([]);
   const [catatanTambahan, setCatatanTambahan] = useState("");
   const [masterErrors, setMasterErrors] = useState<MasterError[]>([]);
@@ -66,6 +70,10 @@ export function SubmitIdeModal({
     if (open) {
       if (editData) {
         setIdAplikasi(editData.id_aplikasi || "");
+        setNamaAplikan(editData.nama_aplikan || "");
+        setNamaUserIde(editData.nama_user_ide || "");
+        setCasSas(editData.cas_sas || "");
+        setChannel(editData.channel || "");
         setCatatanTambahan(editData.catatan_tambahan || editData.catatan || "");
       } else {
         resetForm();
@@ -124,6 +132,10 @@ export function SubmitIdeModal({
 
   const resetForm = () => {
     setIdAplikasi("");
+    setNamaAplikan("");
+    setNamaUserIde("");
+    setCasSas("");
+    setChannel("");
     setSelectedErrors([]);
     setCatatanTambahan("");
     setSearchErrorQuery("");
@@ -141,6 +153,26 @@ export function SubmitIdeModal({
       return;
     }
 
+    if (!namaAplikan.trim()) {
+      setSubmitError("Nama Aplikan wajib diisi.");
+      return;
+    }
+
+    if (!namaUserIde.trim()) {
+      setSubmitError("Nama User IDE wajib diisi.");
+      return;
+    }
+
+    if (!casSas.trim()) {
+      setSubmitError("CAS/SAS wajib diisi.");
+      return;
+    }
+
+    if (!channel) {
+      setSubmitError("Channel wajib dipilih.");
+      return;
+    }
+
     if (selectedErrors.length === 0) {
       setSubmitError("Pilih minimal 1 parameter atau No Error.");
       return;
@@ -155,12 +187,20 @@ export function SubmitIdeModal({
       if (editData) {
         await ideService.updateReport(cleanAppId, {
           errors: selectedErrors,
+          nama_aplikan: namaAplikan.trim(),
+          nama_user_ide: namaUserIde.trim(),
+          cas_sas: casSas.trim(),
+          channel,
           catatan_tambahan: catatanTambahan.trim() || null,
         });
         setSubmitSuccess("Perubahan temuan berhasil disimpan!");
       } else {
         const payload = {
           id_aplikasi: cleanAppId,
+          nama_aplikan: namaAplikan.trim(),
+          nama_user_ide: namaUserIde.trim(),
+          cas_sas: casSas.trim(),
+          channel,
           errors: selectedErrors,
           catatan_tambahan: catatanTambahan.trim() || null,
         };
@@ -255,6 +295,71 @@ export function SubmitIdeModal({
                 disabled={isSubmitting || !!editData}
                 autoFocus={!editData}
               />
+            </div>
+
+            {/* 2. NAMA APLIKAN & NAMA USER IDE (2 kolom) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="nama_aplikan" className="text-xs font-semibold text-foreground">
+                  Nama Aplikan <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="nama_aplikan"
+                  placeholder="Nama lengkap aplikan"
+                  value={namaAplikan}
+                  onChange={(e) => setNamaAplikan(e.target.value)}
+                  className="text-sm h-9 bg-background"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="nama_user_ide" className="text-xs font-semibold text-foreground">
+                  Nama User IDE <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="nama_user_ide"
+                  placeholder="Nama user di sistem IDE"
+                  value={namaUserIde}
+                  onChange={(e) => setNamaUserIde(e.target.value)}
+                  className="text-sm h-9 bg-background"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            {/* 3. CAS/SAS & CHANNEL (2 kolom) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cas_sas" className="text-xs font-semibold text-foreground">
+                  CAS / SAS <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="cas_sas"
+                  placeholder="Nomor CAS/SAS"
+                  value={casSas}
+                  onChange={(e) => setCasSas(e.target.value)}
+                  className="text-sm h-9 bg-background"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="channel" className="text-xs font-semibold text-foreground">
+                  Channel <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="channel"
+                  value={channel}
+                  onChange={(e) => setChannel(e.target.value)}
+                  disabled={isSubmitting}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">-- Pilih Channel --</option>
+                  <option value="MKK">MKK</option>
+                  <option value="Bulk Upload">Bulk Upload</option>
+                  <option value="CAKRA">CAKRA</option>
+                  <option value="RM Tools">RM Tools</option>
+                </select>
+              </div>
             </div>
 
             {/* 2. PARAMETER KESALAHAN */}
@@ -460,7 +565,13 @@ export function SubmitIdeModal({
                 type="submit"
                 size="sm"
                 disabled={
-                  isSubmitting || !idAplikasi.trim() || selectedErrors.length === 0
+                  isSubmitting ||
+                  !idAplikasi.trim() ||
+                  !namaAplikan.trim() ||
+                  !namaUserIde.trim() ||
+                  !casSas.trim() ||
+                  !channel ||
+                  selectedErrors.length === 0
                 }
                 className="text-xs h-9 px-4 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
               >

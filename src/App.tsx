@@ -4,6 +4,7 @@ import LoginPage from "./pages/LoginPage.tsx";
 import ProtectedRoute from "./components/ProtectedRoute.tsx";
 import DashboardPage from "./pages/DashboardPage.tsx";
 import ReportDetailPage from "./pages/ReportDetailPage.tsx";
+import RekapBulananPage from "./pages/RekapBulananPage.tsx";
 import { TooltipProvider } from "./components/ui/tooltip";
 
 function App() {
@@ -19,6 +20,8 @@ function App() {
         {/* Halaman Terproteksi (Harus sudah login) */}
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/rekap" element={<RekapBulananPage />} />
+          <Route path="/ide/rekap" element={<RekapBulananPage />} />
           <Route path="/report/:id_aplikasi" element={<ReportDetailPage />} />
           <Route path="/ide/report/:id_aplikasi" element={<ReportDetailPage />} />
         </Route>
