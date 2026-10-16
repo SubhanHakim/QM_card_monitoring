@@ -1,19 +1,18 @@
-name: Backend CI/CD Pipeline
+name: Frontend CI/CD Pipeline
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["main"]
   pull_request:
-    branches: ["main", "master"]
+    branches: ["main"]
 
-# PENTING: id-token: write wajib sejajar dengan 'on' dan 'jobs'
 permissions:
   id-token: write
   contents: read
 
 jobs:
   build-and-push:
-    name: Build & Push Docker Image to ECR
+    name: Build & Push Frontend Image to ECR
     runs-on: ubuntu-latest
 
     steps:
@@ -39,8 +38,49 @@ jobs:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            VITE_API_URL=http://3.107.42.152
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/qm-backend:latest
-            ${{ steps.login-ecr.outputs.registry }}/qm-backend:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/qm-frontend:latest
+            ${{ steps.login-ecr.outputs.registry }}/qm-frontend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to EC2
+    needs: build-and-push
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS Credentials (via OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::916207038350:role/github-actions-ecr-role
+          aws-region: ap-southeast-2
+
+      - name: Deploy via SSM
+        env:
+          INSTANCE_ID: i-0a3a54c3c0c01a519
+          REGISTRY: 916207038350.dkr.ecr.ap-southeast-2.amazonaws.com
+        run: |
+          IMAGE="$REGISTRY/qm-frontend:${{ github.sha }}"
+          cat > params.json <<EOF
+          {"commands":[
+            "/snap/bin/aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin $REGISTRY",
+            "docker pull $IMAGE",
+            "docker rm -f qm-frontend || true",
+            "docker run -d --name qm-frontend --restart unless-stopped -p 8080:80 $IMAGE",
+            "docker image prune -f"
+          ]}
+          EOF
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters file://params.json \
+            --query "Command.CommandId" --output text)
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query "{Status:Status,Out:StandardOutputContent,Err:StandardErrorContent}"
+          STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query Status --output text)
+          [ "$STATUS" = "Success" ]
