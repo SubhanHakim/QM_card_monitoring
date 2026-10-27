@@ -71,7 +71,7 @@ jobs:
             "docker pull $IMAGE",
             "docker rm -f qm-frontend || true",
             "docker run -d --name qm-frontend --restart unless-stopped -p 8080:80 $IMAGE",
-            "docker image prune -f"
+            "docker image prune -a -f"
           ]}
           EOF
           CMD_ID=$(aws ssm send-command \
