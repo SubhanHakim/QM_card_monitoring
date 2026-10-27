@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -19,33 +11,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { userAuthStore } from "@/store/authStore";
+import { AppShell } from "@/components/AppShell";
 import {
   ideService,
   type RekapBulananResponse,
   type RekapBulananDetailItem,
 } from "@/services/ideService";
-import {
-  AlertCircle,
-  AlertOctagon,
-  AlertTriangle,
-  BarChart3,
-  Calendar,
-  CheckCircle2,
-  ChevronDown,
-  Download,
-  Eye,
-  FileSpreadsheet,
-  FileText,
-  Layers,
-  LogOut,
-  RefreshCw,
-  Search,
-  Sparkles,
-  TrendingUp,
-  Users,
-  X,
-} from "lucide-react";
+import { AlertCircle, Download, RefreshCw, Search, X } from "lucide-react";
 
 const NAMA_BULAN = [
   { value: 1, label: "Januari" },
@@ -63,7 +35,6 @@ const NAMA_BULAN = [
 ];
 
 export default function RekapBulananPage() {
-  const { user, logout } = userAuthStore();
   const navigate = useNavigate();
 
   // Date selection state (default: current month & year)
@@ -89,11 +60,6 @@ export default function RekapBulananPage() {
 
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
 
   const formatUsername = (name: string | null | undefined) => {
     if (!name) return "Petugas QM";
@@ -312,884 +278,533 @@ export default function RekapBulananPage() {
     document.body.removeChild(link);
   };
 
+  const [sebaranTab, setSebaranTab] = useState<"channel" | "analis">("channel");
   const ringkasan = rekap?.ringkasan;
+  const isFirstLoad = isLoadingRekap && !rekap;
+  const periodeLabel =
+    rekap?.periode ||
+    `${NAMA_BULAN.find((b) => b.value === selectedBulan)?.label ?? ""} ${selectedTahun}`;
+
+  // One finding under the title: what most needs attention this month.
+  const finding = isFirstLoad
+    ? "Memuat rekap…"
+    : !ringkasan
+    ? `Periode ${periodeLabel}.`
+    : ringkasan.total_fatal > 0
+    ? `${periodeLabel}: ${ringkasan.total_fatal} dari ${ringkasan.total_aplikasi} aplikasi memiliki temuan critical.`
+    : `${periodeLabel}: tidak ada temuan critical di ${ringkasan.total_aplikasi} aplikasi.`;
+
+  // Peer metrics in one divided container; status cells double as the drill-down filter.
+  const kpis = [
+    {
+      label: "Aplikasi diperiksa",
+      value: ringkasan?.total_aplikasi ?? 0,
+      note: `${ringkasan?.total_error ?? 0} temuan · rata-rata bobot ${ringkasan?.rata_rata_bobot ?? 0}`,
+    },
+    { label: "Critical", value: ringkasan?.total_fatal ?? 0, note: "Bobot ≥ 1,0", status: "Fatal", lead: true },
+    { label: "Minor", value: ringkasan?.total_minor ?? 0, note: "Bobot < 1,0", status: "Minor" },
+    { label: "Lolos", value: ringkasan?.total_lolos ?? 0, note: "Tanpa error", status: "Lolos" },
+  ];
+
+  const headCell = "h-10 px-4 text-xs font-normal text-[#5f6368]";
+  const sel =
+    "h-8 rounded-md border border-[#d1d5db] bg-white px-2.5 text-sm text-[#111] outline-none focus-visible:ring-1 focus-visible:ring-[#003D79]";
+  const cardHead = "flex h-12 items-center justify-between gap-3 border-b border-[#e5e7eb] px-5";
+  const emptyText = "px-5 py-10 text-center text-sm text-[#5f6368]";
+  const statusDot = (s?: string) =>
+    s?.toLowerCase() === "fatal" ? "bg-[#c4242a]" : s?.toLowerCase() === "minor" ? "bg-[#b45309]" : "bg-[#247b50]";
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-slate-50/70 dark:bg-background text-foreground">
-      {/* ─── 1. TOP NAVIGATION BAR ─── */}
-      <header className="sticky top-0 z-20 border-b border-border/70 bg-background/90 backdrop-blur-md px-6 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo & Navigation Tabs */}
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-base shadow-sm">
-                QM
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-bold tracking-tight text-foreground">
-                    Quality Monitoring
-                  </h1>
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 border border-blue-200/70 dark:bg-blue-950/50 dark:text-blue-300">
-                    IDE Stage
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Rekapitulasi Evaluasi Pemeriksaan per Aplikasi
-                </p>
-              </div>
-            </div>
-
-            {/* Segmented Switcher: Real-time vs Rekap Bulanan */}
-            <nav className="hidden md:flex items-center p-1 rounded-xl bg-muted/60 border border-border/50 text-xs font-medium">
-              <button
-                type="button"
-                onClick={() => navigate("/dashboard")}
-                className="px-3.5 py-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5"
-              >
-                <FileText className="h-3.5 w-3.5" />
-                Daftar Laporan
-              </button>
-              <button
-                type="button"
-                className="px-3.5 py-1.5 rounded-lg bg-background text-foreground font-semibold shadow-xs flex items-center gap-1.5"
-              >
-                <BarChart3 className="h-3.5 w-3.5 text-primary" />
-                Rekap Bulanan
-              </button>
-            </nav>
-          </div>
-
-          {/* User Profile & Actions */}
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-3 pl-2.5 pr-3.5 py-1.5 rounded-full border border-border/80 hover:bg-accent/60 transition-colors outline-none cursor-pointer">
-                <Avatar className="h-8 w-8 text-xs font-semibold">
-                  <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                    {user?.name ? user.name.slice(0, 2).toUpperCase() : "QM"}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="text-left hidden sm:block">
-                  <span className="text-sm font-semibold block leading-tight text-foreground">
-                    {user?.name || "Petugas QM"}
-                  </span>
-                  <span className="text-xs text-muted-foreground capitalize">
-                    {user?.role || "analis"}
-                  </span>
-                </div>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 p-1.5">
-                <div className="px-3 py-2 border-b border-border/60">
-                  <p className="text-sm font-semibold text-foreground truncate">
-                    {user?.name || "Petugas QM"}
-                  </p>
-                  <p className="text-xs text-muted-foreground capitalize truncate">
-                    {user?.role || "analis"}
-                  </p>
-                </div>
-                <DropdownMenuItem
-                  onClick={() => navigate("/dashboard")}
-                  className="cursor-pointer text-sm font-medium flex items-center gap-2.5 p-2 rounded-md"
-                >
-                  <FileText className="h-4 w-4" />
-                  Daftar Laporan
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleLogout}
-                  className="text-destructive focus:text-destructive cursor-pointer text-sm font-medium flex items-center gap-2.5 p-2 rounded-md mt-1"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
-
-      {/* ─── 2. MAIN CONTENT CONTAINER ─── */}
-      <main className="flex-1 max-w-7xl mx-auto w-full p-6 md:p-8 space-y-6">
-        {/* Mobile Tab Switcher */}
-        <div className="flex md:hidden items-center p-1 rounded-xl bg-muted/60 border border-border/50 text-xs font-medium w-full">
-          <button
-            type="button"
-            onClick={() => navigate("/dashboard")}
-            className="flex-1 py-2 rounded-lg text-muted-foreground hover:text-foreground text-center"
-          >
-            Daftar Laporan
-          </button>
-          <button
-            type="button"
-            className="flex-1 py-2 rounded-lg bg-background text-foreground font-semibold shadow-xs text-center"
-          >
-            Rekap Bulanan
-          </button>
-        </div>
-
-        {/* ─── PERIODE SELECTOR & HEADER TITLE ─── */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 p-5 rounded-2xl bg-card border border-border/80 shadow-xs">
+    <AppShell>
+      <main className="w-full flex-1 space-y-4 px-4 py-8 md:px-10">
+        {/* TITLE ROW */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                <Calendar className="h-5 w-5" />
-              </div>
-              <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
-                Rekapitulasi Bulanan IDE
-              </h2>
-            </div>
-            <p className="text-xs md:text-sm text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
-              <span>Agregat evaluasi pemeriksaan nasabah, breakdown channel, analis, dan parameter kesalahan</span>
-              {lastUpdated && (
-                <span className="text-[11px] font-mono text-muted-foreground/80 bg-muted/60 px-2 py-0.5 rounded-md">
-                  Update: {lastUpdated}
-                </span>
-              )}
-            </p>
+            <h1 className="text-2xl font-semibold tracking-tight">Rekap bulanan</h1>
+            <p className="mt-1 text-sm text-[#5f6368]">{finding}</p>
           </div>
 
-          {/* Period Selector Controls */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Bulan Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <label htmlFor="select-bulan" className="text-xs font-medium text-muted-foreground">
-                Bulan:
-              </label>
-              <select
-                id="select-bulan"
-                value={selectedBulan}
-                onChange={(e) => setSelectedBulan(Number(e.target.value))}
-                className="h-9 rounded-lg border border-input bg-background px-3 py-1 text-xs font-semibold text-foreground shadow-xs focus:ring-1 focus:ring-ring"
-              >
-                {NAMA_BULAN.map((b) => (
-                  <option key={b.value} value={b.value}>
-                    {b.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tahun Input */}
-            <div className="flex items-center gap-1.5">
-              <label htmlFor="select-tahun" className="text-xs font-medium text-muted-foreground">
-                Tahun:
-              </label>
-              <select
-                id="select-tahun"
-                value={selectedTahun}
-                onChange={(e) => setSelectedTahun(Number(e.target.value))}
-                className="h-9 rounded-lg border border-input bg-background px-3 py-1 text-xs font-semibold text-foreground shadow-xs focus:ring-1 focus:ring-ring"
-              >
-                {[2024, 2025, 2026, 2027].map((yr) => (
-                  <option key={yr} value={yr}>
-                    {yr}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tombol Bulan Ini */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCurrentMonth}
-              className="text-xs h-9 px-3 gap-1.5 font-medium"
+          <div className="flex flex-wrap items-center gap-2">
+            {lastUpdated && (
+              <span className="mr-1 hidden text-xs tabular-nums text-[#5f6368] sm:inline">
+                Diperbarui {lastUpdated}
+              </span>
+            )}
+            <select
+              aria-label="Bulan"
+              value={selectedBulan}
+              onChange={(e) => setSelectedBulan(Number(e.target.value))}
+              className={sel}
             >
-              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-              Bulan Ini
-            </Button>
-
-            {/* Tombol Refresh */}
+              {NAMA_BULAN.map((b) => (
+                <option key={b.value} value={b.value}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Tahun"
+              value={selectedTahun}
+              onChange={(e) => setSelectedTahun(Number(e.target.value))}
+              className={sel}
+            >
+              {[2024, 2025, 2026, 2027].map((yr) => (
+                <option key={yr} value={yr}>
+                  {yr}
+                </option>
+              ))}
+            </select>
             <Button
               variant="outline"
-              size="sm"
+              onClick={handleCurrentMonth}
+              className="h-8 rounded-md border-[#d1d5db] bg-white px-3 text-sm font-medium hover:bg-[#e9e9e9]/50"
+            >
+              Bulan ini
+            </Button>
+            <Button
+              variant="outline"
               onClick={handleRefresh}
               disabled={isLoadingRekap || isRefreshing}
-              className="text-xs h-9 px-3 gap-1.5 font-medium"
+              className="h-8 gap-2 rounded-md border-[#d1d5db] bg-white px-3 text-sm font-medium hover:bg-[#e9e9e9]/50"
             >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${
-                  isLoadingRekap || isRefreshing ? "animate-spin text-primary" : ""
-                }`}
-              />
-              {isRefreshing ? "Memuat..." : "Refresh"}
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoadingRekap || isRefreshing ? "animate-spin" : ""}`} />
+              Refresh
             </Button>
           </div>
         </div>
 
-        {/* Error Alert */}
+        {/* Error stays inside the block that failed */}
         {rekapError && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-red-50 text-red-800 text-sm border border-red-200 dark:bg-red-950/40 dark:text-red-300">
-            <AlertCircle className="h-5 w-5 shrink-0" />
-            <div className="flex-1">
-              <p className="font-semibold">Gagal memuat rekap bulanan</p>
-              <p className="text-xs text-red-700 dark:text-red-400">{rekapError}</p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-[#e5e7eb] bg-white px-5 py-3 text-sm">
+            <span className="flex items-center gap-2 text-[#831c1e]">
+              <AlertCircle className="h-4 w-4 shrink-0 text-[#c4242a]" />
+              {rekapError}
+              {lastUpdated ? ` Data terakhir valid ${lastUpdated}.` : ""}
+            </span>
+            <button
+              type="button"
               onClick={() => fetchRekap(selectedBulan, selectedTahun)}
-              className="text-xs bg-white dark:bg-card"
+              className="shrink-0 cursor-pointer font-medium underline-offset-4 hover:underline"
             >
-              Coba Lagi
-            </Button>
+              Coba lagi
+            </button>
           </div>
         )}
 
-        {/* ─── 3. EXECUTIVE SUMMARY CARDS (RINGKASAN) ─── */}
-        {isLoadingRekap && !rekap ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full rounded-2xl" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {/* Total Aplikasi */}
-            <Card className="rounded-2xl border-border/80 shadow-xs hover:shadow-md transition-shadow">
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">Total Aplikasi</span>
-                  <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
-                    <FileText className="h-4 w-4" />
-                  </div>
+        {/* KPI STRIP: one container, 1px dividers. Status cells double as the drill-down filter. */}
+        <section
+          aria-label="Ringkasan"
+          className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#e5e7eb] lg:grid-cols-4"
+        >
+          {kpis.map((k) => {
+            const selected = !!k.status && filterStatus === k.status;
+            const body = (
+              <>
+                <p className={`text-sm ${selected ? "font-medium text-[#111]" : "text-[#5f6368]"}`}>{k.label}</p>
+                <div
+                  className={`mt-2 flex h-9 items-end font-normal leading-none tabular-nums ${
+                    k.lead ? "text-[32px]" : "text-2xl"
+                  } ${k.value === 0 ? "text-[#6b6b6b]" : k.lead ? "text-[#c4242a]" : "text-[#111]"}`}
+                >
+                  {isFirstLoad ? <Skeleton className="h-6 w-12 rounded-sm" /> : k.value}
                 </div>
-                <div className="text-2xl font-bold tracking-tight text-foreground">
-                  {ringkasan?.total_aplikasi ?? 0}
-                </div>
-                <p className="text-[11px] text-muted-foreground">Periksa di {rekap?.periode}</p>
-              </CardContent>
-            </Card>
-
-            {/* Total Error */}
-            <Card className="rounded-2xl border-border/80 shadow-xs hover:shadow-md transition-shadow">
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">Total Temuan</span>
-                  <div className="p-1.5 rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400">
-                    <AlertCircle className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-bold tracking-tight text-foreground">
-                  {ringkasan?.total_error ?? 0}
-                </div>
-                <p className="text-[11px] text-muted-foreground">Parameter error tercatat</p>
-              </CardContent>
-            </Card>
-
-            {/* Rata-rata Bobot */}
-            <Card className="rounded-2xl border-border/80 shadow-xs hover:shadow-md transition-shadow">
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">Rata-rata Bobot</span>
-                  <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
-                    <TrendingUp className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-bold tracking-tight text-foreground">
-                  {ringkasan?.rata_rata_bobot ?? 0}
-                </div>
-                <p className="text-[11px] text-muted-foreground">Bobot per aplikasi</p>
-              </CardContent>
-            </Card>
-
-            {/* Total Fatal */}
-            <Card
-              onClick={() => applyQuickFilter("status", "Fatal")}
-              className={`rounded-2xl border-border/80 shadow-xs hover:shadow-md transition-all cursor-pointer ${
-                filterStatus === "Fatal"
-                  ? "ring-2 ring-red-500 bg-red-50/30 dark:bg-red-950/20"
-                  : ""
-              }`}
-            >
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-red-600 dark:text-red-400">
-                    Temuan Fatal
-                  </span>
-                  <div className="p-1.5 rounded-lg bg-red-100/70 text-red-600 dark:bg-red-950/60 dark:text-red-400">
-                    <AlertOctagon className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-bold tracking-tight text-red-600 dark:text-red-400">
-                  {ringkasan?.total_fatal ?? 0}
-                </div>
-                <p className="text-[11px] text-muted-foreground">Bobot ≥ 1.0 (Klik filter)</p>
-              </CardContent>
-            </Card>
-
-            {/* Total Minor */}
-            <Card
-              onClick={() => applyQuickFilter("status", "Minor")}
-              className={`rounded-2xl border-border/80 shadow-xs hover:shadow-md transition-all cursor-pointer ${
-                filterStatus === "Minor"
-                  ? "ring-2 ring-amber-500 bg-amber-50/30 dark:bg-amber-950/20"
-                  : ""
-              }`}
-            >
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                    Temuan Minor
-                  </span>
-                  <div className="p-1.5 rounded-lg bg-amber-100/70 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
-                    <AlertTriangle className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
-                  {ringkasan?.total_minor ?? 0}
-                </div>
-                <p className="text-[11px] text-muted-foreground">Bobot &lt; 1.0 (Klik filter)</p>
-              </CardContent>
-            </Card>
-
-            {/* Total Lolos */}
-            <Card
-              onClick={() => applyQuickFilter("status", "Lolos")}
-              className={`rounded-2xl border-border/80 shadow-xs hover:shadow-md transition-all cursor-pointer ${
-                filterStatus === "Lolos"
-                  ? "ring-2 ring-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20"
-                  : ""
-              }`}
-            >
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                    Lolos / Clean
-                  </span>
-                  <div className="p-1.5 rounded-lg bg-emerald-100/70 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
-                    <CheckCircle2 className="h-4 w-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-                  {ringkasan?.total_lolos ?? 0}
-                </div>
-                <p className="text-[11px] text-muted-foreground">Tanpa error (Klik filter)</p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* ─── 4. ANALYTICAL BREAKDOWN (3 COLUMNS / CARDS) ─── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* A. BREAKDOWN PER CHANNEL */}
-          <Card className="rounded-2xl border-border/80 shadow-xs flex flex-col">
-            <CardHeader className="px-5 py-4 border-b border-border/60 pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-primary" />
-                  <CardTitle className="text-sm font-bold text-foreground">
-                    Distribusi per Channel
-                  </CardTitle>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {rekap?.per_channel?.length || 0} Channel
-                </span>
+                <p className="mt-2 text-xs text-[#5f6368]">{k.note}</p>
+              </>
+            );
+            const base = "border-b-2 bg-white p-5 text-left";
+            return k.status ? (
+              <button
+                key={k.label}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => applyQuickFilter("status", k.status!)}
+                className={`${base} cursor-pointer transition-colors hover:bg-[#f9f9f9] focus-visible:outline-2 focus-visible:outline-[#003D79] ${
+                  selected ? "border-[#003D79]" : "border-transparent"
+                }`}
+              >
+                {body}
+              </button>
+            ) : (
+              <div key={k.label} className={`${base} border-transparent`}>
+                {body}
               </div>
-            </CardHeader>
-            <CardContent className="p-5 flex-1 flex flex-col justify-between">
-              {isLoadingRekap && !rekap ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full rounded-xl" />
-                  ))}
-                </div>
-              ) : !rekap?.per_channel || rekap.per_channel.length === 0 ? (
-                <div className="text-center py-8 text-xs text-muted-foreground">
-                  Belum ada data channel pada periode ini.
-                </div>
+            );
+          })}
+        </section>
+
+        {/* ─── BREAKDOWN: top parameters + one tabbed card for channel / analis ─── */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Top parameters */}
+          <section className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+            <div className={cardHead}>
+              <h2 className="text-base font-medium">Parameter error teratas</h2>
+              <span className="text-sm text-[#5f6368]">Paling sering muncul</span>
+            </div>
+            {isFirstLoad ? (
+              <div className="space-y-2 p-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-9 w-full rounded-sm" />
+                ))}
+              </div>
+            ) : !rekap?.top_error || rekap.top_error.length === 0 ? (
+              <p className={emptyText}>Tidak ada temuan error pada periode ini.</p>
+            ) : (
+              <ol className="p-1">
+                {rekap.top_error.slice(0, 5).map((err, idx) => {
+                  const isFatal =
+                    (err.kategori || "").toLowerCase().includes("fatal") || Number(err.bobot) >= 1;
+                  return (
+                    <li key={err.id_error || idx} className="flex h-11 items-center gap-3 rounded-md px-4">
+                      <span className="w-5 shrink-0 text-sm tabular-nums text-[#5f6368]">{idx + 1}.</span>
+                      <span className="min-w-0 flex-1 truncate text-sm">{err.nama_field}</span>
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-medium ${
+                          isFatal ? "bg-[#ffedea] text-[#831c1e]" : "bg-[#fffbeb] text-[#92400e]"
+                        }`}
+                      >
+                        {isFatal ? "Critical" : "Minor"}
+                      </span>
+                      <span className="w-16 shrink-0 text-right text-sm tabular-nums">
+                        {err.frekuensi} <span className="text-xs text-[#5f6368]">temuan</span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </section>
+
+          {/* Channel / analis */}
+          <section className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+            <div className="flex items-center justify-between gap-3 border-b border-[#e5e7eb] px-5">
+              <div role="tablist" className="-mb-px flex gap-5">
+                {(
+                  [
+                    { key: "channel", label: "Per channel", n: rekap?.per_channel?.length || 0 },
+                    { key: "analis", label: "Per analis", n: rekap?.per_analis?.length || 0 },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={sebaranTab === t.key}
+                    onClick={() => setSebaranTab(t.key)}
+                    className={`h-12 cursor-pointer border-b-2 text-base transition-colors ${
+                      sebaranTab === t.key
+                        ? "border-[#003D79] font-medium text-[#111]"
+                        : "border-transparent text-[#5f6368] hover:text-[#111]"
+                    }`}
+                  >
+                    {t.label} <span className="text-sm font-normal tabular-nums text-[#5f6368]">{t.n}</span>
+                  </button>
+                ))}
+              </div>
+              <span className="hidden text-sm text-[#5f6368] sm:inline">Klik untuk memfilter tabel</span>
+            </div>
+
+            {isFirstLoad ? (
+              <div className="space-y-2 p-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full rounded-sm" />
+                ))}
+              </div>
+            ) : sebaranTab === "channel" ? (
+              !rekap?.per_channel || rekap.per_channel.length === 0 ? (
+                <p className={emptyText}>Belum ada data channel pada periode ini.</p>
               ) : (
-                <div className="space-y-3">
-                  {rekap.per_channel.map((ch) => {
+                <ul className="p-1">
+                  {rekap.per_channel.slice(0, 5).map((ch) => {
                     const isSelected = filterChannel === ch.channel;
-                    const maxApps = ringkasan?.total_aplikasi || 1;
-                    const pct = Math.round((ch.total_aplikasi / maxApps) * 100);
-
+                    const pct = Math.round((ch.total_aplikasi / (ringkasan?.total_aplikasi || 1)) * 100);
                     return (
-                      <div
-                        key={ch.channel}
-                        onClick={() => applyQuickFilter("channel", ch.channel)}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer select-none ${
-                          isSelected
-                            ? "bg-primary/10 border-primary font-semibold shadow-xs"
-                            : "border-border/60 hover:bg-muted/40"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between text-xs mb-1.5">
-                          <span className="font-semibold text-foreground flex items-center gap-1.5">
-                            {ch.channel}
-                            {isSelected && (
-                              <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.2 rounded-md">
-                                Terfilter
-                              </span>
-                            )}
+                      <li key={ch.channel}>
+                        <button
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => applyQuickFilter("channel", ch.channel)}
+                          className={`w-full cursor-pointer rounded-md px-4 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-[#003D79] ${
+                            isSelected ? "bg-[#f2f4f7]" : "hover:bg-[#f9f9f9]"
+                          }`}
+                        >
+                          <span className="flex items-baseline justify-between gap-3 text-sm">
+                            <span className={isSelected ? "font-medium" : ""}>{ch.channel}</span>
+                            <span className="tabular-nums text-[#5f6368]">
+                              <span className="text-[#111]">{ch.total_aplikasi}</span> aplikasi · {ch.total_error} error · {pct}%
+                            </span>
                           </span>
-                          <span className="text-muted-foreground">
-                            <strong className="text-foreground">{ch.total_aplikasi}</strong> app (
-                            {ch.total_error} err)
+                          <span className="mt-2 block h-0.5 w-full bg-[#e5e7eb]">
+                            <span
+                              className="block h-0.5 bg-[#003D79] transition-[width] duration-300"
+                              style={{ width: `${Math.min(pct, 100)}%` }}
+                            />
                           </span>
-                        </div>
-                        {/* Progress Bar */}
-                        <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className="bg-primary h-1.5 rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(pct, 100)}%` }}
-                          />
-                        </div>
-                        <div className="flex justify-between items-center text-[10px] text-muted-foreground mt-1">
-                          <span>{pct}% dari total aplikasi</span>
-                          <span className="text-primary hover:underline font-medium">
-                            {isSelected ? "Batal filter" : "Filter drill-down →"}
-                          </span>
-                        </div>
-                      </div>
+                        </button>
+                      </li>
                     );
                   })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* B. TOP 10 TEMUAN ERROR */}
-          <Card className="rounded-2xl border-border/80 shadow-xs flex flex-col">
-            <CardHeader className="px-5 py-4 border-b border-border/60 pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AlertOctagon className="h-4 w-4 text-amber-500" />
-                  <CardTitle className="text-sm font-bold text-foreground">
-                    Top Parameter Error
-                  </CardTitle>
-                </div>
-                <span className="text-xs text-muted-foreground">Paling sering muncul</span>
-              </div>
-            </CardHeader>
-            <CardContent className="p-5 flex-1 overflow-y-auto max-h-[380px]">
-              {isLoadingRekap && !rekap ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Skeleton key={i} className="h-10 w-full rounded-xl" />
-                  ))}
-                </div>
-              ) : !rekap?.top_error || rekap.top_error.length === 0 ? (
-                <div className="text-center py-8 text-xs text-muted-foreground">
-                  Tidak ada temuan error pada periode ini (100% Bersih).
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {rekap.top_error.map((err, idx) => {
-                    const isFatal =
-                      (err.kategori || "").toLowerCase().includes("fatal") ||
-                      Number(err.bobot) >= 1;
-
-                    return (
-                      <div
-                        key={err.id_error || idx}
-                        className="flex items-center justify-between p-2.5 rounded-xl border border-border/60 bg-background/50 hover:bg-muted/40 transition-colors"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
-                            {idx + 1}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-foreground truncate">
-                              {err.nama_field}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span
-                                className={`text-[10px] font-semibold px-1.5 py-0.2 rounded ${
-                                  isFatal
-                                    ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
-                                    : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                                }`}
-                              >
-                                {isFatal ? "Fatal" : "Minor"}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground">
-                                Bobot: {err.bobot}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Frequency Count */}
-                        <div className="text-right shrink-0">
-                          <span className="text-xs font-bold text-foreground">
-                            {err.frekuensi}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground block">
-                            temuan
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* C. PRODUKTIVITAS PER ANALIS */}
-          <Card className="rounded-2xl border-border/80 shadow-xs flex flex-col">
-            <CardHeader className="px-5 py-4 border-b border-border/60 pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary" />
-                  <CardTitle className="text-sm font-bold text-foreground">
-                    Performa per Analis
-                  </CardTitle>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {rekap?.per_analis?.length || 0} Analis
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="p-5 flex-1 overflow-y-auto max-h-[380px]">
-              {isLoadingRekap && !rekap ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full rounded-xl" />
-                  ))}
-                </div>
-              ) : !rekap?.per_analis || rekap.per_analis.length === 0 ? (
-                <div className="text-center py-8 text-xs text-muted-foreground">
-                  Belum ada data analis pada periode ini.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {rekap.per_analis.map((an) => {
+                </ul>
+              )
+            ) : !rekap?.per_analis || rekap.per_analis.length === 0 ? (
+              <p className={emptyText}>Belum ada data analis pada periode ini.</p>
+            ) : (
+              <>
+                <ul className="p-1">
+                  {rekap.per_analis.slice(0, 5).map((an) => {
                     const isSelected = filterAnalis === an.username;
-
                     return (
-                      <div
-                        key={an.username}
-                        onClick={() => applyQuickFilter("analis", an.username)}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer select-none ${
-                          isSelected
-                            ? "bg-primary/10 border-primary font-semibold shadow-xs"
-                            : "border-border/60 hover:bg-muted/40"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between text-xs mb-1.5">
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">
-                              {an.username ? an.username.slice(0, 2).toUpperCase() : "AN"}
-                            </div>
-                            <span className="font-semibold text-foreground">
+                      <li key={an.username}>
+                        <button
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => applyQuickFilter("analis", an.username)}
+                          className={`flex w-full cursor-pointer items-center gap-3 rounded-md px-4 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-[#003D79] ${
+                            isSelected ? "bg-[#f2f4f7]" : "hover:bg-[#f9f9f9]"
+                          }`}
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e9e9e9] text-xs font-medium">
+                            {an.username ? an.username.slice(0, 2).toUpperCase() : "AN"}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className={`block truncate text-sm ${isSelected ? "font-medium" : ""}`}>
                               {formatUsername(an.username)}
                             </span>
-                            {isSelected && (
-                              <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.2 rounded-md">
-                                Terfilter
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-xs font-bold text-foreground">
-                            {an.total_aplikasi} App
+                            <span className="block text-xs tabular-nums text-[#5f6368]">
+                              <span className={an.total_fatal > 0 ? "text-[#831c1e]" : ""}>Critical {an.total_fatal}</span>
+                              {" · "}Minor {an.total_minor}
+                              {" · "}Lolos {an.total_lolos}
+                            </span>
                           </span>
-                        </div>
-
-                        {/* Breakdown status badges */}
-                        <div className="flex items-center gap-1.5 text-[10px] mt-2">
-                          <span className="bg-red-50 text-red-700 px-1.5 py-0.5 rounded font-medium dark:bg-red-950/40 dark:text-red-300">
-                            Fatal: {an.total_fatal}
+                          <span className="shrink-0 text-right text-sm tabular-nums">
+                            {an.total_aplikasi} <span className="text-[#5f6368]">aplikasi</span>
                           </span>
-                          <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-medium dark:bg-amber-950/40 dark:text-amber-300">
-                            Minor: {an.total_minor}
-                          </span>
-                          <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-medium dark:bg-emerald-950/40 dark:text-emerald-300">
-                            Lolos: {an.total_lolos}
-                          </span>
-                          <span className="ml-auto text-muted-foreground">
-                            {an.total_error} err
-                          </span>
-                        </div>
-                      </div>
+                        </button>
+                      </li>
                     );
                   })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </ul>
+                {rekap.per_analis.length > 5 && (
+                  <p className="px-5 pb-3 text-xs text-[#5f6368]">
+                    +{rekap.per_analis.length - 5} analis lainnya, gunakan filter di tabel.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
         </div>
 
-        {/* ─── 5. DRILL-DOWN DETAIL TABLE ─── */}
-        <Card className="rounded-2xl border-border/80 shadow-xs overflow-hidden">
-          <CardHeader className="p-5 border-b border-border/60 bg-muted/15 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-4 w-4 text-primary" />
-                  <CardTitle className="text-base font-bold text-foreground">
-                    Drill-Down: Daftar Aplikasi Terperiksa
-                  </CardTitle>
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                    {filteredDetailList.length} Aplikasi
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Rincian seluruh aplikasi nasabah untuk periode {rekap?.periode || "terpilih"}
-                </p>
-              </div>
-
-              {/* Export Button */}
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportCSV}
-                  disabled={filteredDetailList.length === 0}
-                  className="text-xs h-8.5 px-3 gap-1.5 font-medium shadow-xs"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Export CSV
-                </Button>
-              </div>
+        {/* ─── DRILL-DOWN TABLE ─── */}
+        <section className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+          <div className="flex flex-col gap-3 border-b border-[#e5e7eb] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-medium">
+                Aplikasi terperiksa <span className="font-normal tabular-nums text-[#5f6368]">{filteredDetailList.length}</span>
+              </h2>
+              <p className="mt-0.5 text-sm text-[#5f6368]">Rincian seluruh aplikasi nasabah untuk {periodeLabel}.</p>
             </div>
+            <Button
+              variant="outline"
+              onClick={handleExportCSV}
+              disabled={filteredDetailList.length === 0}
+              className="h-8 gap-2 rounded-md border-[#d1d5db] bg-white px-3 text-sm font-medium hover:bg-[#e9e9e9]/50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </Button>
+          </div>
 
-            {/* Error Alert Drill-Down */}
-            {detailError && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 text-red-700 text-xs border border-red-200 dark:bg-red-950/40 dark:text-red-300">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{detailError}</span>
-              </div>
-            )}
-
-            {/* Filter Toolbar */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 pt-1">
-              {/* Search Bar */}
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Cari ID Aplikasi, Nama Aplikan, User IDE, CAS/SAS..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 pr-7 text-xs h-8.5 bg-background rounded-lg"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Filter Channel */}
-              <select
-                value={filterChannel}
-                onChange={(e) => setFilterChannel(e.target.value)}
-                className="h-8.5 rounded-lg border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-xs focus:ring-1 focus:ring-ring"
-              >
-                <option value="ALL">Semua Channel</option>
-                <option value="MKK">MKK</option>
-                <option value="Bulk Upload">Bulk Upload</option>
-                <option value="CAKRA">CAKRA</option>
-                <option value="RM Tools">RM Tools</option>
-              </select>
-
-              {/* Filter Analis */}
-              <select
-                value={filterAnalis}
-                onChange={(e) => setFilterAnalis(e.target.value)}
-                className="h-8.5 rounded-lg border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-xs focus:ring-1 focus:ring-ring"
-              >
-                <option value="ALL">Semua Analis</option>
-                {rekap?.per_analis?.map((a) => (
-                  <option key={a.username} value={a.username}>
-                    {formatUsername(a.username)}
-                  </option>
-                ))}
-              </select>
-
-              {/* Filter Status */}
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="h-8.5 rounded-lg border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-xs focus:ring-1 focus:ring-ring"
-              >
-                <option value="ALL">Semua Status</option>
-                <option value="Fatal">Fatal</option>
-                <option value="Minor">Minor</option>
-                <option value="Lolos">Lolos</option>
-              </select>
-
-              {/* Reset Filters */}
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetAllFilters}
-                  className="text-xs h-8.5 px-2.5 text-muted-foreground hover:text-foreground gap-1"
+          {/* Filter toolbar */}
+          <div className="flex flex-col gap-2 border-b border-[#e5e7eb] px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="relative min-w-0 flex-1 sm:min-w-[240px]">
+              <Search className="absolute left-3 top-2 h-4 w-4 text-[#5f6368]" />
+              <Input
+                type="text"
+                aria-label="Cari aplikasi"
+                placeholder="Cari ID aplikasi, aplikan, user IDE, CAS/SAS"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 rounded-md border-[#d1d5db] bg-white pl-9 pr-8 text-sm placeholder:text-[#6b6b6b] focus-visible:ring-1"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="Hapus pencarian"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-2 cursor-pointer text-[#5f6368] hover:text-[#111]"
                 >
-                  <X className="h-3.5 w-3.5" />
-                  Reset
-                </Button>
+                  <X className="h-4 w-4" />
+                </button>
               )}
             </div>
-          </CardHeader>
+            <select
+              aria-label="Filter channel"
+              value={filterChannel}
+              onChange={(e) => setFilterChannel(e.target.value)}
+              className={sel}
+            >
+              <option value="ALL">Semua channel</option>
+              <option value="MKK">MKK</option>
+              <option value="Bulk Upload">Bulk Upload</option>
+              <option value="CAKRA">CAKRA</option>
+              <option value="RM Tools">RM Tools</option>
+            </select>
+            <select
+              aria-label="Filter analis"
+              value={filterAnalis}
+              onChange={(e) => setFilterAnalis(e.target.value)}
+              className={sel}
+            >
+              <option value="ALL">Semua analis</option>
+              {rekap?.per_analis?.map((a) => (
+                <option key={a.username} value={a.username}>
+                  {formatUsername(a.username)}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Filter status"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className={sel}
+            >
+              <option value="ALL">Semua status</option>
+              <option value="Fatal">Critical</option>
+              <option value="Minor">Minor</option>
+              <option value="Lolos">Lolos</option>
+            </select>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                className="cursor-pointer px-1 text-sm text-[#5f6368] underline-offset-4 hover:text-[#111] hover:underline"
+              >
+                Reset
+              </button>
+            )}
+          </div>
 
-          {/* Drill-Down Table Content */}
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader className="bg-muted/30">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-12 text-xs font-semibold text-center">No</TableHead>
-                  <TableHead className="text-xs font-semibold">ID Aplikasi</TableHead>
-                  <TableHead className="text-xs font-semibold">Nama Aplikan / User IDE</TableHead>
-                  <TableHead className="text-xs font-semibold">CAS/SAS & Channel</TableHead>
-                  <TableHead className="text-xs font-semibold">Petugas Analis</TableHead>
-                  <TableHead className="text-xs font-semibold text-center">Bobot / Error</TableHead>
-                  <TableHead className="text-xs font-semibold text-center">Status</TableHead>
-                  <TableHead className="text-xs font-semibold text-right pr-6">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
+          {/* Error stays inside the block that failed */}
+          {detailError && (
+            <div className="flex items-center justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3 text-sm">
+              <span className="flex items-center gap-2 text-[#831c1e]">
+                <AlertCircle className="h-4 w-4 shrink-0 text-[#c4242a]" />
+                {detailError}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  fetchDetail(selectedBulan, selectedTahun, filterChannel, filterAnalis, filterStatus)
+                }
+                className="shrink-0 cursor-pointer font-medium underline-offset-4 hover:underline"
+              >
+                Coba lagi
+              </button>
+            </div>
+          )}
 
-              <TableBody>
-                {isLoadingDetail ? (
-                  Array.from({ length: 5 }).map((_, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell colSpan={8} className="py-3 px-6">
-                        <Skeleton className="h-8 w-full rounded-md" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : filteredDetailList.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <FileSpreadsheet className="h-8 w-8 text-muted-foreground/40" />
-                        <p className="text-sm font-medium text-foreground">
-                          Tidak ada aplikasi yang sesuai dengan filter.
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Coba ganti filter channel, analis, atau kata kunci pencarian.
-                        </p>
-                        {hasActiveFilters && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={resetAllFilters}
-                            className="text-xs mt-2"
-                          >
-                            Reset Semua Filter
-                          </Button>
-                        )}
-                      </div>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-[#e5e7eb] hover:bg-transparent">
+                <TableHead className={`${headCell} pl-5`}>ID aplikasi</TableHead>
+                <TableHead className={headCell}>Aplikan / user IDE</TableHead>
+                <TableHead className={headCell}>CAS/SAS / channel</TableHead>
+                <TableHead className={headCell}>Analis</TableHead>
+                <TableHead className={`${headCell} text-right`}>Bobot / error</TableHead>
+                <TableHead className={headCell}>Status</TableHead>
+                <TableHead className={`${headCell} pr-5 text-right`}>
+                  <span className="sr-only">Aksi</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {isLoadingDetail ? (
+                Array.from({ length: 5 }).map((_, idx) => (
+                  <TableRow key={idx} className="h-14 border-[#f2f2f2] hover:bg-transparent">
+                    <TableCell colSpan={7} className="px-5">
+                      <Skeleton className="h-6 w-full rounded-sm" />
                     </TableCell>
                   </TableRow>
-                ) : (
-                  filteredDetailList.map((item, idx) => {
-                    const isFatal = item.status?.toLowerCase() === "fatal";
-                    const isMinor = item.status?.toLowerCase() === "minor";
-                    const isLolos = item.status?.toLowerCase() === "lolos";
-
-                    return (
-                      <TableRow
-                        key={item.id_aplikasi || idx}
-                        className="hover:bg-muted/40 transition-colors"
+                ))
+              ) : filteredDetailList.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={7} className="h-40 whitespace-normal text-center">
+                    <p className="text-sm font-medium">Tidak ada aplikasi yang sesuai.</p>
+                    <p className="mt-1 text-sm text-[#5f6368]">
+                      {hasActiveFilters
+                        ? "Ubah filter channel, analis, status, atau kata kunci."
+                        : `Belum ada aplikasi terperiksa pada ${periodeLabel}.`}
+                    </p>
+                    {hasActiveFilters && (
+                      <button
+                        type="button"
+                        onClick={resetAllFilters}
+                        className="mt-2 cursor-pointer text-sm font-medium underline-offset-4 hover:underline"
                       >
-                        {/* No */}
-                        <TableCell className="text-xs text-muted-foreground text-center font-mono">
-                          {idx + 1}
-                        </TableCell>
+                        Reset filter
+                      </button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredDetailList.map((item, idx) => (
+                  <TableRow
+                    key={item.id_aplikasi || idx}
+                    className="h-14 border-[#f2f2f2] transition-colors hover:bg-[#f9f9f9]"
+                  >
+                    <TableCell className="pl-5">
+                      <div className="font-mono text-sm font-medium">{item.id_aplikasi}</div>
+                      {item.tanggal_input && (
+                        <div className="text-xs text-[#5f6368]">
+                          {new Date(item.tanggal_input).toLocaleDateString("id-ID", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </div>
+                      )}
+                    </TableCell>
 
-                        {/* ID Aplikasi */}
-                        <TableCell>
-                          <div className="font-mono text-xs font-bold text-foreground">
-                            {item.id_aplikasi}
-                          </div>
-                          {item.tanggal_input && (
-                            <span className="text-[10px] text-muted-foreground">
-                              {new Date(item.tanggal_input).toLocaleDateString("id-ID", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                            </span>
-                          )}
-                        </TableCell>
+                    <TableCell className="px-4">
+                      <div className="text-sm">{item.nama_aplikan || "—"}</div>
+                      <div className="text-xs text-[#5f6368]">User IDE: {item.nama_user_ide || "—"}</div>
+                    </TableCell>
 
-                        {/* Nama Aplikan / User IDE */}
-                        <TableCell>
-                          <div className="text-xs font-semibold text-foreground">
-                            {item.nama_aplikan || "-"}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            User IDE: {item.nama_user_ide || "-"}
-                          </div>
-                        </TableCell>
+                    <TableCell className="px-4">
+                      <div className="text-sm tabular-nums">{item.cas_sas || "—"}</div>
+                      <div className="text-xs text-[#5f6368]">{item.channel || "Tidak diketahui"}</div>
+                    </TableCell>
 
-                        {/* CAS/SAS & Channel */}
-                        <TableCell>
-                          <div className="text-xs font-medium text-foreground">
-                            {item.cas_sas || "-"}
-                          </div>
-                          <div className="mt-0.5">
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                              {item.channel || "Unknown"}
-                            </span>
-                          </div>
-                        </TableCell>
+                    <TableCell className="px-4 text-sm">{formatUsername(item.analis)}</TableCell>
 
-                        {/* Analis */}
-                        <TableCell>
-                          <span className="text-xs font-medium text-foreground">
-                            {formatUsername(item.analis)}
-                          </span>
-                        </TableCell>
+                    <TableCell className="px-4 text-right">
+                      <div className="text-sm font-medium tabular-nums">{item.total_bobot}</div>
+                      <div className="text-xs tabular-nums text-[#5f6368]">{item.jumlah_error} parameter</div>
+                    </TableCell>
 
-                        {/* Bobot & Error */}
-                        <TableCell className="text-center">
-                          <div className="text-xs font-bold text-foreground">
-                            {item.total_bobot}
-                          </div>
-                          <span className="text-[10px] text-muted-foreground">
-                            {item.jumlah_error} parameter
-                          </span>
-                        </TableCell>
+                    <TableCell className="px-4">
+                      <span className="inline-flex items-center gap-2 text-sm">
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusDot(item.status)}`} />
+                        {item.status === "Fatal" ? "Critical" : item.status}
+                      </span>
+                    </TableCell>
 
-                        {/* Status Badge */}
-                        <TableCell className="text-center">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                              isFatal
-                                ? "bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900"
-                                : isMinor
-                                ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900"
-                                : "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900"
-                            }`}
-                          >
-                            {isFatal && <AlertOctagon className="h-3 w-3" />}
-                            {isMinor && <AlertTriangle className="h-3 w-3" />}
-                            {isLolos && <CheckCircle2 className="h-3 w-3" />}
-                            {item.status}
-                          </span>
-                        </TableCell>
-
-                        {/* Aksi */}
-                        <TableCell className="text-right pr-6">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => navigate(`/report/${encodeURIComponent(item.id_aplikasi)}`)}
-                            className="h-8 px-2.5 text-xs text-primary hover:text-primary hover:bg-primary/10 gap-1 font-semibold"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            Detail
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
+                    <TableCell className="pr-5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/report/${encodeURIComponent(item.id_aplikasi)}`)}
+                        className="cursor-pointer text-sm font-medium underline-offset-4 hover:underline"
+                      >
+                        Detail
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </section>
       </main>
-    </div>
+    </AppShell>
   );
 }

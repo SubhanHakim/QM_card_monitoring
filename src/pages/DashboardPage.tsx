@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -24,32 +16,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { userAuthStore } from "@/store/authStore";
+import { AppShell } from "@/components/AppShell";
 import { ideService, type IdeReportItem } from "@/services/ideService";
 import { SubmitIdeModal } from "@/components/SubmitIdeModal";
-import {
-  AlertCircle,
-  AlertOctagon,
-  AlertTriangle,
-  ArrowUpRight,
-  BarChart3,
-  CheckCircle,
-  ChevronDown,
-  Clock,
-  Eye,
-  FileCheck2,
-  FileSpreadsheet,
-  FileText,
-  LogOut,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Search,
-  X,
-} from "lucide-react";
+import { AlertCircle, RefreshCw, Search, X } from "lucide-react";
 
 export default function DashboardPage() {
-  const { user, logout } = userAuthStore();
   const navigate = useNavigate();
 
   // State
@@ -62,11 +34,6 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("ALL");
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login", { replace: true });
-  };
 
   // Helper formatting analis name: "subhan_hakim" -> "Subhan Hakim"
   const formatAnalisName = (name: string | null | undefined) => {
@@ -177,297 +144,143 @@ export default function DashboardPage() {
     return { totalApps, fatalApps, nonFatalApps, cleanApps, totalErrors };
   }, [reports]);
 
+  const filterTabs = [
+    { key: "ALL", label: "Semua", count: reports.length },
+    { key: "FATAL", label: "Ada critical", count: stats.fatalApps },
+    { key: "NON_FATAL", label: "Minor saja", count: stats.nonFatalApps },
+    ...(stats.cleanApps > 0
+      ? [{ key: "CLEAN", label: "Lolos", count: stats.cleanApps }]
+      : []),
+  ];
+
+  // Peer metrics in one divided container; the critical figure answers the screen's question, so it leads.
+  const kpis = [
+    { label: "Aplikasi dievaluasi", value: stats.totalApps, note: "Berkas aplikasi nasabah" },
+    { label: "Aplikasi ada critical", value: stats.fatalApps, note: "Memiliki error bobot ≥ 1", lead: true },
+    { label: "Minor saja", value: stats.nonFatalApps, note: "Hanya temuan non-critical" },
+    { label: "Total temuan error", value: stats.totalErrors, note: "Di semua aplikasi" },
+  ];
+
+  const headCell = "h-10 px-4 text-xs font-normal text-[#5f6368]";
+  const filtered = searchQuery || selectedCategoryFilter !== "ALL";
+
   return (
-    <div className="flex min-h-screen w-full flex-col bg-slate-50/70 dark:bg-background text-foreground">
-      {/* ─── 1. TOP NAVIGATION BAR ─── */}
-      <header className="sticky top-0 z-20 border-b border-border/70 bg-background/90 backdrop-blur-md px-6 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo & Navigation Tabs */}
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-base shadow-sm">
-                QM
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-bold tracking-tight text-foreground">
-                    Quality Monitoring
-                  </h1>
-                  <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200/70 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-900/40">
-                    IDE Stage
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Rekapitulasi Evaluasi Pemeriksaan per Aplikasi
-                </p>
-              </div>
-            </div>
-
-            {/* Segmented Switcher */}
-            <nav className="hidden md:flex items-center p-1 rounded-xl bg-muted/60 border border-border/50 text-xs font-medium">
-              <button
-                type="button"
-                className="px-3.5 py-1.5 rounded-lg bg-background text-foreground font-semibold shadow-xs flex items-center gap-1.5"
-              >
-                <FileText className="h-3.5 w-3.5 text-primary" />
-                Daftar Laporan
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/rekap")}
-                className="px-3.5 py-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5"
-              >
-                <BarChart3 className="h-3.5 w-3.5" />
-                Rekap Bulanan
-              </button>
-            </nav>
-          </div>
-
-          {/* User Profile & Actions */}
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-3 pl-2.5 pr-3.5 py-1.5 rounded-full border border-border/80 hover:bg-accent/60 transition-colors outline-none cursor-pointer">
-                <Avatar className="h-8 w-8 text-xs font-semibold">
-                  <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                    {user?.name ? user.name.slice(0, 2).toUpperCase() : "QM"}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="text-left hidden sm:block">
-                  <span className="text-sm font-semibold block leading-tight text-foreground">
-                    {user?.name || "Petugas QM"}
-                  </span>
-                  <span className="text-xs text-muted-foreground capitalize">
-                    {user?.role || "analis"}
-                  </span>
-                </div>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 p-1.5">
-                <div className="px-3 py-2 border-b border-border/60">
-                  <p className="text-sm font-semibold text-foreground truncate">
-                    {user?.name || "Petugas QM"}
-                  </p>
-                  <p className="text-xs text-muted-foreground capitalize truncate">
-                    {user?.role || "analis"}
-                  </p>
-                </div>
-                <DropdownMenuItem
-                  onClick={() => navigate("/rekap")}
-                  className="cursor-pointer text-sm font-medium flex items-center gap-2.5 p-2 rounded-md"
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  Rekap Bulanan
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleLogout}
-                  className="text-destructive focus:text-destructive cursor-pointer text-sm font-medium flex items-center gap-2.5 p-2 rounded-md mt-1"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
-
-      {/* ─── 2. MAIN CONTAINER ─── */}
-      <main className="flex-1 max-w-7xl mx-auto w-full p-6 md:p-8 space-y-6">
-        {/* PAGE TITLE & ACTION BAR */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <AppShell>
+      {/* ─── CANVAS: one gutter (16px) between blocks ─── */}
+      <main className="w-full flex-1 space-y-4 px-4 py-8 md:px-10">
+        {/* TITLE ROW */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">
-              Dashboard Temuan IDE
-            </h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Daftar rekapitulasi temuan kesalahan dikelompokkan per aplikasi nasabah
+            <h1 className="text-2xl font-semibold tracking-tight">Temuan IDE</h1>
+            <p className="mt-1 text-sm text-[#5f6368]">
+              {isLoading
+                ? "Memuat rekap temuan…"
+                : stats.totalApps === 0
+                ? "Belum ada aplikasi yang dievaluasi."
+                : stats.fatalApps > 0
+                ? `${stats.fatalApps} dari ${stats.totalApps} aplikasi memiliki temuan critical dan perlu ditindak.`
+                : `Tidak ada temuan critical di ${stats.totalApps} aplikasi yang dievaluasi.`}
             </p>
           </div>
 
           <div className="flex items-center gap-3">
+            <span className="hidden text-xs text-[#5f6368] tabular-nums sm:inline">
+              Diperbarui {lastUpdated || "—"}
+            </span>
             <Button
               variant="outline"
-              size="default"
               onClick={() => fetchReportData(true)}
               disabled={isLoading || isRefreshing}
-              className="gap-2 text-sm h-10 px-4 bg-background shadow-xs hover:bg-muted/70 font-medium"
+              className="h-8 gap-2 rounded-md border-[#d1d5db] bg-white px-3 text-sm font-medium hover:bg-[#e9e9e9]/50"
             >
-              <RefreshCw
-                className={`h-4 w-4 text-muted-foreground ${
-                  isRefreshing || isLoading ? "animate-spin" : ""
-                }`}
-              />
-              <span>Refresh</span>
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing || isLoading ? "animate-spin" : ""}`} />
+              Refresh
             </Button>
-
             <Button
-              size="default"
               onClick={() => {
                 setEditingReport(null);
                 setIsSubmitOpen(true);
               }}
-              className="gap-2 text-sm h-10 px-5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm font-semibold"
+              className="h-8 rounded-md bg-[#003D79] px-3.5 text-sm font-medium text-white hover:bg-[#003D79]/90"
             >
-              <Plus className="h-4 w-4 stroke-[2.5]" />
-              <span>Input Temuan IDE</span>
+              Input temuan IDE
             </Button>
           </div>
         </div>
 
-        {/* STATS OVERVIEW CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: Total Aplikasi */}
-          <Card className="border border-border/80 shadow-xs bg-card">
-            <CardContent className="p-5 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">
-                  Aplikasi Dievaluasi
-                </p>
-                <div className="text-3xl font-extrabold tracking-tight mt-1.5 text-foreground">
-                  {isLoading ? <Skeleton className="h-8 w-16" /> : stats.totalApps}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Berkas aplikasi nasabah
-                </p>
-              </div>
-              <div className="h-11 w-11 rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 flex items-center justify-center shadow-2xs">
-                <FileCheck2 className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Card 2: Aplikasi Fatal */}
-          <Card className="border border-red-200/70 dark:border-red-900/40 shadow-xs bg-card">
-            <CardContent className="p-5 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-red-600 dark:text-red-400 tracking-wide uppercase">
-                  Aplikasi Ada Fatal
-                </p>
-                <div className="text-3xl font-extrabold tracking-tight mt-1.5 text-red-600 dark:text-red-400">
-                  {isLoading ? <Skeleton className="h-8 w-16" /> : stats.fatalApps}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Memiliki error bobot ≥ 1
-                </p>
-              </div>
-              <div className="h-11 w-11 rounded-xl bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400 flex items-center justify-center shadow-2xs">
-                <AlertOctagon className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Card 3: Non-Fatal */}
-          <Card className="border border-amber-200/70 dark:border-amber-900/40 shadow-xs bg-card">
-            <CardContent className="p-5 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 tracking-wide uppercase">
-                  Minor Saja
-                </p>
-                <div className="text-3xl font-extrabold tracking-tight mt-1.5 text-amber-700 dark:text-amber-400">
-                  {isLoading ? <Skeleton className="h-8 w-16" /> : stats.nonFatalApps}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Hanya temuan non-fatal
-                </p>
-              </div>
-              <div className="h-11 w-11 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400 flex items-center justify-center shadow-2xs">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Card 4: Total Temuan Keseluruhan */}
-          <Card className="border border-border/80 shadow-xs bg-card">
-            <CardContent className="p-5 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">
-                  Total Temuan Error
-                </p>
-                <div className="text-3xl font-extrabold tracking-tight mt-1.5 text-foreground">
-                  {isLoading ? <Skeleton className="h-8 w-16" /> : stats.totalErrors}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {lastUpdated ? `Sync: ${lastUpdated}` : "Siap"}
-                </p>
-              </div>
-              <div className="h-11 w-11 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 flex items-center justify-center shadow-2xs">
-                <FileSpreadsheet className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ─── 3. DATA TABLE CARD ─── */}
-        <div className="rounded-xl border border-border/80 bg-card shadow-xs overflow-hidden">
-          {/* TOOLBAR: FILTER & SEARCH */}
-          <div className="p-4 border-b border-border/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-card">
-            {/* Category Filter Tabs */}
-            <div className="flex items-center gap-1.5 p-1 rounded-lg bg-muted/60 border border-border/50 w-fit flex-wrap">
-              <button
-                type="button"
-                onClick={() => setSelectedCategoryFilter("ALL")}
-                className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  selectedCategoryFilter === "ALL"
-                    ? "bg-background text-foreground shadow-xs font-bold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+        {/* KPI STRIP: one container, 1px dividers */}
+        <section
+          aria-label="Ringkasan"
+          className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#e5e7eb] lg:grid-cols-4"
+        >
+          {kpis.map((k) => (
+            <div key={k.label} className="bg-white p-5">
+              <p className="text-sm text-[#5f6368]">{k.label}</p>
+              <div
+                className={`mt-2 font-normal tabular-nums leading-none ${
+                  k.lead ? "text-[32px]" : "text-2xl"
+                } ${k.value === 0 ? "text-[#6b6b6b]" : k.lead ? "text-[#c4242a]" : "text-[#111]"}`}
               >
-                Semua ({reports.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedCategoryFilter("FATAL")}
-                className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                  selectedCategoryFilter === "FATAL"
-                    ? "bg-background text-red-600 shadow-xs font-bold"
-                    : "text-muted-foreground hover:text-red-600"
-                }`}
-              >
-                <span className="h-2 w-2 rounded-full bg-red-500"></span>
-                Ada Fatal ({stats.fatalApps})
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedCategoryFilter("NON_FATAL")}
-                className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                  selectedCategoryFilter === "NON_FATAL"
-                    ? "bg-background text-amber-600 shadow-xs font-bold"
-                    : "text-muted-foreground hover:text-amber-600"
-                }`}
-              >
-                <span className="h-2 w-2 rounded-full bg-amber-500"></span>
-                Minor Saja ({stats.nonFatalApps})
-              </button>
-              {stats.cleanApps > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategoryFilter("CLEAN")}
-                  className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                    selectedCategoryFilter === "CLEAN"
-                      ? "bg-background text-emerald-600 shadow-xs font-bold"
-                      : "text-muted-foreground hover:text-emerald-600"
-                  }`}
-                >
-                  <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-                  Lolos ({stats.cleanApps})
-                </button>
-              )}
+                {isLoading ? <Skeleton className="h-6 w-12 rounded-sm" /> : k.value}
+              </div>
+              <p className="mt-2 text-xs text-[#5f6368]">{k.note}</p>
+            </div>
+          ))}
+        </section>
+
+        {/* ─── DATA TABLE ─── */}
+        <section className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+          {/* Tabs on a full-width rule, search at the right */}
+          <div className="flex flex-col gap-2 border-b border-[#e5e7eb] px-5 sm:flex-row sm:items-center sm:justify-between">
+            <div role="tablist" className="-mb-px flex gap-6 overflow-x-auto">
+              {filterTabs.map((t) => {
+                const active = selectedCategoryFilter === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    role="tab"
+                    aria-selected={active}
+                    type="button"
+                    onClick={() => setSelectedCategoryFilter(t.key)}
+                    className={`flex h-12 cursor-pointer items-center gap-2 whitespace-nowrap border-b-2 text-sm transition-colors ${
+                      active
+                        ? "border-[#003D79] font-medium text-[#111]"
+                        : "border-transparent text-[#5f6368] hover:text-[#111]"
+                    }`}
+                  >
+                    {t.label}
+                    <span
+                      className={`min-w-5 rounded px-1.5 py-0.5 text-center text-xs font-medium tabular-nums ${
+                        t.key === "FATAL" && t.count > 0
+                          ? "bg-[#ffedea] text-[#831c1e]"
+                          : active
+                          ? "bg-[#003D79] text-white"
+                          : "bg-[#f2f2f2] text-[#5f6368]"
+                      }`}
+                    >
+                      {t.count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Search Input */}
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <div className="relative w-full pb-3 sm:w-80 sm:pb-0">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#5f6368]" />
               <Input
                 type="text"
-                placeholder="Cari ID aplikasi, field, analis..."
+                aria-label="Cari aplikasi"
+                placeholder="Cari ID aplikasi, field, analis"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-8 h-10 text-sm bg-background border-border/80 focus-visible:ring-1"
+                className="h-9 rounded-md border-[#d1d5db] bg-white pl-9 pr-8 text-sm placeholder:text-[#6b6b6b] focus-visible:ring-1"
               />
               {searchQuery && (
                 <button
+                  type="button"
+                  aria-label="Hapus pencarian"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+                  className="absolute right-2.5 top-2.5 cursor-pointer text-[#5f6368] hover:text-[#111]"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -475,385 +288,216 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ERROR BANNER */}
+          {/* Error stays inside the block that failed */}
           {error && (
-            <div className="m-4 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3.5 text-sm text-red-700 dark:bg-red-950/30 dark:border-red-900/40 dark:text-red-300">
-              <div className="flex items-center gap-2.5">
-                <AlertCircle className="h-5 w-5 shrink-0 text-red-600" />
-                <span>{error}</span>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
+            <div className="flex items-center justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3 text-sm">
+              <span className="flex items-center gap-2 text-[#831c1e]">
+                <AlertCircle className="h-4 w-4 shrink-0 text-[#c4242a]" />
+                {error}
+                {lastUpdated ? ` Data terakhir valid ${lastUpdated}.` : ""}
+              </span>
+              <button
+                type="button"
                 onClick={() => fetchReportData()}
-                className="text-xs h-8 border-red-300 hover:bg-red-100/60 font-medium"
+                className="cursor-pointer font-medium underline-offset-4 hover:underline"
               >
-                Coba Lagi
-              </Button>
+                Coba lagi
+              </button>
             </div>
           )}
 
-          {/* TABLE CONTAINER */}
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50/90 dark:bg-muted/40 border-b border-border/70 hover:bg-slate-50/90">
-                  <TableHead className="w-14 text-center text-xs font-bold text-muted-foreground uppercase tracking-wider py-3.5">
-                    No
-                  </TableHead>
-                  <TableHead className="w-[170px] text-xs font-bold text-muted-foreground uppercase tracking-wider py-3.5 whitespace-nowrap">
-                    ID Aplikasi
-                  </TableHead>
-                  <TableHead className="min-w-[320px] text-xs font-bold text-muted-foreground uppercase tracking-wider py-3.5">
-                    Daftar Parameter Error
-                  </TableHead>
-                  <TableHead className="w-[120px] text-center text-xs font-bold text-muted-foreground uppercase tracking-wider py-3.5 whitespace-nowrap">
-                    Jumlah Error
-                  </TableHead>
-                  <TableHead className="w-[120px] text-center text-xs font-bold text-muted-foreground uppercase tracking-wider py-3.5 whitespace-nowrap">
-                    Total Bobot
-                  </TableHead>
-                  <TableHead className="w-[130px] text-xs font-bold text-muted-foreground uppercase tracking-wider py-3.5 whitespace-nowrap">
-                    Status
-                  </TableHead>
-                  <TableHead className="w-[160px] text-xs font-bold text-muted-foreground uppercase tracking-wider py-3.5 whitespace-nowrap">
-                    Analis
-                  </TableHead>
-                  <TableHead className="w-[160px] text-center text-xs font-bold text-muted-foreground uppercase tracking-wider py-3.5 whitespace-nowrap">
-                    Aksi
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
+          <Table className="min-w-[960px] table-fixed">
+            <TableHeader>
+              <TableRow className="border-[#e5e7eb] hover:bg-transparent">
+                <TableHead className={`${headCell} w-44 pl-5`}>ID aplikasi</TableHead>
+                <TableHead className={headCell}>Parameter error</TableHead>
+                <TableHead className={`${headCell} w-24 text-right`}>Temuan</TableHead>
+                <TableHead className={`${headCell} w-28 text-right`}>Total bobot</TableHead>
+                <TableHead className={`${headCell} w-36 pl-8`}>Status</TableHead>
+                <TableHead className={`${headCell} w-48`}>Analis</TableHead>
+                <TableHead className={`${headCell} w-32 pr-5 text-right`}>
+                  <span className="sr-only">Aksi</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
 
-              <TableBody>
-                {isLoading ? (
-                  // Skeleton Loading Rows
-                  Array.from({ length: 4 }).map((_, idx) => (
-                    <TableRow key={idx} className="border-b border-border/40">
-                      <TableCell className="text-center py-4">
-                        <Skeleton className="h-4 w-4 mx-auto" />
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <Skeleton className="h-6 w-28 rounded-md" />
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <div className="flex gap-1.5">
-                          <Skeleton className="h-6 w-24 rounded-md" />
-                          <Skeleton className="h-6 w-32 rounded-md" />
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center py-4">
-                        <Skeleton className="h-5 w-8 mx-auto" />
-                      </TableCell>
-                      <TableCell className="text-center py-4">
-                        <Skeleton className="h-6 w-12 mx-auto rounded-md" />
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <Skeleton className="h-6 w-20 rounded-full" />
-                      </TableCell>
-                      <TableCell className="py-4">
-                        <Skeleton className="h-5 w-24" />
-                      </TableCell>
-                      <TableCell className="text-center py-4">
-                        <Skeleton className="h-7 w-16 mx-auto rounded-md" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : filteredReports.length === 0 ? (
-                  // Empty State
-                  <TableRow>
-                    <TableCell colSpan={8} className="h-56 text-center">
-                      <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                        <div className="rounded-full bg-muted/80 p-4 border border-border/50">
-                          <FileText className="h-7 w-7 text-muted-foreground/70" />
-                        </div>
-                        <p className="text-base font-semibold text-foreground">
-                          {searchQuery || selectedCategoryFilter !== "ALL"
-                            ? "Tidak ada aplikasi yang cocok"
-                            : "Belum ada rekapan evaluasi IDE"}
-                        </p>
-                        <p className="text-sm text-muted-foreground max-w-md">
-                          {searchQuery || selectedCategoryFilter !== "ALL"
-                            ? "Coba ubah kata kunci pencarian atau ganti filter kategori."
-                            : "Klik tombol 'Input Temuan IDE' di atas untuk mencatat temuan baru."}
-                        </p>
-                        {(searchQuery || selectedCategoryFilter !== "ALL") && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSearchQuery("");
-                              setSelectedCategoryFilter("ALL");
-                            }}
-                            className="text-xs mt-1"
-                          >
-                            Reset Semua Filter
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
+            <TableBody>
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, idx) => (
+                  <TableRow key={idx} className="h-12 border-[#f2f2f2] hover:bg-transparent">
+                    <TableCell className="pl-5"><Skeleton className="h-4 w-28 rounded-sm" /></TableCell>
+                    <TableCell className="px-4"><Skeleton className="h-5 w-40 rounded-sm" /></TableCell>
+                    <TableCell className="px-4"><Skeleton className="ml-auto h-4 w-6 rounded-sm" /></TableCell>
+                    <TableCell className="px-4"><Skeleton className="ml-auto h-4 w-8 rounded-sm" /></TableCell>
+                    <TableCell className="px-4"><Skeleton className="h-4 w-16 rounded-sm" /></TableCell>
+                    <TableCell className="px-4"><Skeleton className="h-4 w-24 rounded-sm" /></TableCell>
+                    <TableCell className="pr-5"><Skeleton className="ml-auto h-4 w-20 rounded-sm" /></TableCell>
                   </TableRow>
-                ) : (
-                  // Data Rows (1 Row = 1 Application)
-                  filteredReports.map((item, index) => {
-                    const hasFatal = item.errors?.some((e) => Number(e.bobot) >= 1);
-                    const errorCount = item.errors?.length || 0;
-                    const totalBobotNum =
-                      typeof item.total_bobot === "number"
-                        ? Math.round(item.total_bobot * 100) / 100
-                        : parseFloat(String(item.total_bobot || 0)) || 0;
-
-                    // Group and deduplicate errors for a clean, non-crowded display
-                    const groupedErrorsMap = new Map<
-                      string,
-                      { nama_field: string; bobot: number; count: number }
-                    >();
-                    for (const err of item.errors || []) {
-                      const name = err.nama_field;
-                      const existing = groupedErrorsMap.get(name);
-                      if (existing) {
-                        existing.count += 1;
-                      } else {
-                        groupedErrorsMap.set(name, {
-                          nama_field: name,
-                          bobot: Number(err.bobot),
-                          count: 1,
-                        });
-                      }
-                    }
-                    const groupedErrors = Array.from(groupedErrorsMap.values()).sort((a, b) => {
-                      if ((b.bobot >= 1 ? 1 : 0) !== (a.bobot >= 1 ? 1 : 0)) {
-                        return (b.bobot >= 1 ? 1 : 0) - (a.bobot >= 1 ? 1 : 0);
-                      }
-                      return b.count - a.count;
-                    });
-
-                    const visibleErrors = groupedErrors.slice(0, 2);
-                    const hiddenErrors = groupedErrors.slice(2);
-                    const hiddenCount = hiddenErrors.reduce((sum, e) => sum + e.count, 0);
-
-                    return (
-                      <TableRow
-                        key={item.id_aplikasi || index}
-                        className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                ))
+              ) : filteredReports.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={7} className="h-40 text-center whitespace-normal">
+                    <p className="text-sm font-medium">
+                      {filtered ? "Tidak ada aplikasi yang cocok." : "Belum ada rekap evaluasi IDE."}
+                    </p>
+                    <p className="mt-1 text-sm text-[#5f6368]">
+                      {filtered
+                        ? "Ubah kata kunci atau pilih tab lain."
+                        : "Catat temuan pertama lewat tombol Input temuan IDE."}
+                    </p>
+                    {filtered && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setSelectedCategoryFilter("ALL");
+                        }}
+                        className="mt-2 cursor-pointer text-sm font-medium underline-offset-4 hover:underline"
                       >
-                        {/* 1. No */}
-                        <TableCell className="text-center text-xs text-muted-foreground font-medium py-4">
-                          {index + 1}
-                        </TableCell>
+                        Reset filter
+                      </button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredReports.map((item) => {
+                  const hasFatal = item.errors?.some((e) => Number(e.bobot) >= 1);
+                  const errorCount = item.errors?.length || 0;
+                  const totalBobotNum =
+                    typeof item.total_bobot === "number"
+                      ? Math.round(item.total_bobot * 100) / 100
+                      : parseFloat(String(item.total_bobot || 0)) || 0;
+                  const detailUrl = `/report/${encodeURIComponent(item.id_aplikasi)}`;
 
-                        {/* 2. ID Aplikasi (Clickable to detail) */}
-                        <TableCell className="py-4 whitespace-nowrap">
+                  // Group duplicate parameters, fatal first
+                  const grouped = new Map<string, { nama_field: string; bobot: number; count: number }>();
+                  for (const err of item.errors || []) {
+                    const g = grouped.get(err.nama_field);
+                    if (g) g.count += 1;
+                    else grouped.set(err.nama_field, { nama_field: err.nama_field, bobot: Number(err.bobot), count: 1 });
+                  }
+                  const groupedErrors = Array.from(grouped.values()).sort(
+                    (a, b) => Number(b.bobot >= 1) - Number(a.bobot >= 1) || b.count - a.count
+                  );
+                  const visibleErrors = groupedErrors.slice(0, 2);
+                  const hiddenErrors = groupedErrors.slice(2);
+                  const hiddenCount = hiddenErrors.reduce((sum, e) => sum + e.count, 0);
+
+                  const chip = "inline-flex shrink-0 items-center whitespace-nowrap rounded px-2 py-0.5 text-xs font-medium";
+
+                  return (
+                    <TableRow
+                      key={item.id_aplikasi}
+                      className="h-12 border-[#f2f2f2] transition-colors hover:bg-[#f9f9f9]"
+                    >
+                      <TableCell className="pl-5">
+                        <button
+                          type="button"
+                          onClick={() => navigate(detailUrl)}
+                          className="cursor-pointer font-mono text-sm font-medium hover:text-[#003D79] focus-visible:outline-2 focus-visible:outline-[#003D79]"
+                        >
+                          {item.id_aplikasi}
+                        </button>
+                      </TableCell>
+
+                      <TableCell className="px-4">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {groupedErrors.length === 0 ? (
+                            <span className="text-sm text-[#5f6368]">Tidak ada error</span>
+                          ) : (
+                            <>
+                              {visibleErrors.map((err) => (
+                                <span
+                                  key={err.nama_field}
+                                  className={`${chip} ${
+                                    err.bobot >= 1
+                                      ? "bg-[#ffedea] text-[#831c1e]"
+                                      : "bg-[#fffbeb] text-[#92400e]"
+                                  }`}
+                                >
+                                  {err.nama_field}
+                                  {err.count > 1 && <span className="ml-1 font-normal tabular-nums">×{err.count}</span>}
+                                </span>
+                              ))}
+                              {hiddenCount > 0 && (
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    onClick={() => navigate(detailUrl)}
+                                    className={`${chip} cursor-pointer bg-[#f2f2f2] text-[#5f6368] hover:text-[#111]`}
+                                  >
+                                    +{hiddenCount} lainnya
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs p-2.5 text-xs">
+                                    <ul className="space-y-1">
+                                      {hiddenErrors.map((h) => (
+                                        <li key={h.nama_field} className="flex justify-between gap-4">
+                                          <span>
+                                            {h.nama_field}
+                                            {h.count > 1 ? ` (${h.count}×)` : ""}
+                                          </span>
+                                          <span>{h.bobot >= 1 ? "Critical" : "Minor"}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="px-4 text-right tabular-nums">{errorCount}</TableCell>
+                      <TableCell className="px-4 text-right font-medium tabular-nums">{totalBobotNum}</TableCell>
+
+                      <TableCell className="pl-8 pr-4">
+                        <span className="inline-flex items-center gap-2 text-sm">
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              hasFatal ? "bg-[#c4242a]" : totalBobotNum > 0 ? "bg-[#b45309]" : "bg-[#247b50]"
+                            }`}
+                          />
+                          {hasFatal ? "Critical" : totalBobotNum > 0 ? "Minor" : "Lolos"}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="px-4 text-sm">{formatAnalisName(item.analis)}</TableCell>
+
+                      <TableCell className="pr-5 text-right">
+                        <div className="inline-flex items-center gap-4 text-sm">
                           <button
                             type="button"
-                            onClick={() => navigate(`/report/${encodeURIComponent(item.id_aplikasi)}`)}
-                            className="font-mono text-sm font-semibold px-2.5 py-1 rounded-md bg-muted/80 hover:bg-primary/10 hover:text-primary text-foreground border border-border/60 hover:border-primary/40 transition-colors cursor-pointer inline-flex items-center gap-1.5 group"
-                            title="Klik untuk melihat detail aplikasi"
+                            onClick={() => navigate(detailUrl)}
+                            className="cursor-pointer font-medium underline-offset-4 hover:underline"
                           >
-                            <span>{item.id_aplikasi}</span>
-                            <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                            Detail
                           </button>
-                        </TableCell>
-
-                        {/* 3. Daftar Parameter Error (Clean & Simplified) */}
-                        <TableCell className="py-4">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {groupedErrors.length > 0 ? (
-                              <>
-                                {visibleErrors.map((err, errIdx) => {
-                                  const isFatal = err.bobot >= 1;
-                                  const isClean =
-                                    err.bobot === 0 ||
-                                    err.nama_field?.toUpperCase().includes("NO ERROR");
-
-                                  if (isClean) {
-                                    return (
-                                      <span
-                                        key={`clean-${errIdx}`}
-                                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200"
-                                      >
-                                        <CheckCircle className="h-3 w-3 text-emerald-600" />
-                                        <span>{err.nama_field}</span>
-                                      </span>
-                                    );
-                                  }
-
-                                  return (
-                                    <span
-                                      key={`err-${errIdx}-${err.nama_field}`}
-                                      className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold border ${
-                                        isFatal
-                                          ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-red-200/80 dark:border-red-900/40"
-                                          : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200/80 dark:border-amber-900/40"
-                                      }`}
-                                    >
-                                      <span>{err.nama_field}</span>
-                                      {err.count > 1 && (
-                                        <span className="ml-1 opacity-75 font-normal text-[11px]">
-                                          ×{err.count}
-                                        </span>
-                                      )}
-                                    </span>
-                                  );
-                                })}
-
-                                {hiddenCount > 0 && (
-                                  <Tooltip>
-                                    <TooltipTrigger
-                                      onClick={() =>
-                                        navigate(`/report/${encodeURIComponent(item.id_aplikasi)}`)
-                                      }
-                                      className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground cursor-pointer transition-colors border border-border/60"
-                                      title="Lihat parameter lainnya"
-                                    >
-                                      +{hiddenCount} lainnya
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="text-xs p-2.5 max-w-xs shadow-md">
-                                      <div className="space-y-1">
-                                        <p className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider pb-1 border-b border-border/40">
-                                          Parameter Lainnya:
-                                        </p>
-                                        {hiddenErrors.map((h, hIdx) => (
-                                          <div
-                                            key={hIdx}
-                                            className="flex items-center justify-between gap-3 text-xs"
-                                          >
-                                            <span>
-                                              {h.nama_field} {h.count > 1 ? `(${h.count}x)` : ""}
-                                            </span>
-                                            <span
-                                              className={
-                                                h.bobot >= 1
-                                                  ? "text-red-500 font-semibold"
-                                                  : "text-amber-500"
-                                              }
-                                            >
-                                              {h.bobot >= 1 ? "Fatal" : "Minor"}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                )}
-                              </>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <CheckCircle className="h-3 w-3 text-emerald-600" />
-                                Bersih (No Error)
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-
-                        {/* 4. Jumlah Error */}
-                        <TableCell className="text-center py-4 whitespace-nowrap">
-                          <span className="text-sm font-medium text-foreground">
-                            {errorCount} Temuan
-                          </span>
-                        </TableCell>
-
-                        {/* 5. Total Bobot */}
-                        <TableCell className="text-center py-4 whitespace-nowrap">
-                          <span
-                            className={`font-mono text-sm font-bold px-2.5 py-1 rounded-md border ${
-                              hasFatal
-                                ? "bg-red-50/80 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900/40"
-                                : totalBobotNum > 0
-                                ? "bg-amber-50/80 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900/40"
-                                : "bg-emerald-50/80 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/40"
-                            }`}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingReport(item);
+                              setIsSubmitOpen(true);
+                            }}
+                            className="cursor-pointer text-[#5f6368] underline-offset-4 hover:text-[#111] hover:underline"
                           >
-                            {totalBobotNum}
-                          </span>
-                        </TableCell>
+                            Edit
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
 
-                        {/* 6. Status */}
-                        <TableCell className="py-4 whitespace-nowrap">
-                          {hasFatal ? (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200/80">
-                              <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
-                              Fatal
-                            </span>
-                          ) : totalBobotNum > 0 ? (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/80">
-                              <span className="w-2 h-2 rounded-full bg-amber-500" />
-                              Minor
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/80">
-                              <span className="w-2 h-2 rounded-full bg-emerald-600" />
-                              Lolos
-                            </span>
-                          )}
-                        </TableCell>
-
-                        {/* 7. Analis */}
-                        <TableCell className="py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="h-7 w-7 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-xs font-bold shrink-0 border border-border/60 shadow-2xs">
-                              {item.analis ? item.analis.slice(0, 1).toUpperCase() : "U"}
-                            </span>
-                            <span className="font-semibold text-foreground text-sm truncate">
-                              {formatAnalisName(item.analis)}
-                            </span>
-                          </div>
-                        </TableCell>
-
-                        {/* 8. Aksi (Detail & Edit Button) */}
-                        <TableCell className="text-center py-4 whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => navigate(`/report/${encodeURIComponent(item.id_aplikasi)}`)}
-                              className="h-8 px-2.5 text-xs gap-1.5 font-medium hover:bg-primary hover:text-primary-foreground border-border/80 transition-colors"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                              <span>Detail</span>
-                            </Button>
-
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditingReport(item);
-                                setIsSubmitOpen(true);
-                              }}
-                              className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-primary hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-colors"
-                              title="Edit Temuan"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              <span>Edit</span>
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+          <div className="border-t border-[#e5e7eb] px-5 py-3 text-xs text-[#5f6368]">
+            Menampilkan <span className="tabular-nums text-[#111]">{filteredReports.length}</span> dari{" "}
+            <span className="tabular-nums">{reports.length}</span> aplikasi nasabah
           </div>
-
-          {/* TABLE FOOTER / RECORD COUNTER */}
-          <div className="px-5 py-3.5 border-t border-border/60 bg-slate-50/60 dark:bg-muted/20 flex items-center justify-between text-xs text-muted-foreground font-medium">
-            <span>
-              Menampilkan{" "}
-              <strong className="text-foreground font-bold">
-                {filteredReports.length}
-              </strong>{" "}
-              aplikasi nasabah
-            </span>
-            <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5" />
-              Terakhir diperbarui: {lastUpdated || "-"}
-            </span>
-          </div>
-        </div>
+        </section>
       </main>
 
-      {/* ─── 4. POPUP MODAL INPUT / EDIT TEMUAN IDE ─── */}
       <SubmitIdeModal
         open={isSubmitOpen}
         onOpenChange={(isOpen) => {
@@ -866,6 +510,6 @@ export default function DashboardPage() {
         }}
         editData={editingReport}
       />
-    </div>
+    </AppShell>
   );
 }

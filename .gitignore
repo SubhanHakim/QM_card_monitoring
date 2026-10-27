@@ -38,3 +38,10 @@ lerna-debug.log*
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# AI agent skills & tooling (installed via `npx skills add`, not part of the app)
+.agents/
+.claude/skills/
+.claude/settings.local.json
+.taste-skill/
+skills-lock.json
